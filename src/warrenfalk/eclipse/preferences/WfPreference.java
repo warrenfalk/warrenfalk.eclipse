@@ -247,16 +247,16 @@ public abstract class WfPreference {
 		
 		public KeyBinding bindingInstance(String keySeq, String cmdId, Parameterization[] parameterizations, String context) {
 			try {
-			return new KeyBinding(
-					KeySequence.getInstance(keySeq),
-					new ParameterizedCommand(getCmdService().getCommand(cmdId), parameterizations),
-					getBindingService().getDefaultSchemeId(),
-					context,
-					null,
-					null,
-					null,
-					Binding.USER
-					);
+				return new KeyBinding(
+						KeySequence.getInstance(keySeq),
+						new ParameterizedCommand(getCmdService().getCommand(cmdId), parameterizations),
+						getBindingService().getDefaultSchemeId(),
+						context,
+						null,
+						null,
+						null,
+						Binding.USER
+						);
 			}
 			catch (ParseException pe) {
 				throw new RuntimeException(pe);
