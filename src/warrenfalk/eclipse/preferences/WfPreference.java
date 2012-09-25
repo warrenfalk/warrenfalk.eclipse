@@ -4,6 +4,10 @@ import java.io.IOException;
 import java.util.HashSet;
 import java.util.Set;
 
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
+
+import org.apache.commons.io.IOUtils;
 import org.eclipse.core.commands.Parameterization;
 import org.eclipse.core.commands.ParameterizedCommand;
 import org.eclipse.core.runtime.preferences.InstanceScope;
@@ -18,6 +22,10 @@ import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.commands.ICommandService;
 import org.eclipse.ui.keys.IBindingService;
 import org.eclipse.ui.preferences.ScopedPreferenceStore;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.w3c.dom.NodeList;
+import org.xml.sax.SAXException;
 
 /**
  * Abstract class, overridden for each custom common preference set.
@@ -91,6 +99,70 @@ public abstract class WfPreference {
 						throw new RuntimeException(e);
 					}
 				}
+			},
+			
+			new WfPreference("Custom Java Formatter") {
+
+				@Override
+				boolean isConfigured() {
+					IPreferenceStore s = new ScopedPreferenceStore(InstanceScope.INSTANCE, "org.eclipse.jdt.ui");
+					return s.getString("formatter_profile").endsWith("Warren - Java");
+				}
+
+				@Override
+				void configure() {
+					try {
+						IPreferenceStore jdtUiPrefs = new ScopedPreferenceStore(InstanceScope.INSTANCE, "org.eclipse.jdt.ui");
+						IPreferenceStore jdtCorePrefs = new ScopedPreferenceStore(InstanceScope.INSTANCE, "org.eclipse.jdt.core");
+						
+						String profilesString = IOUtils.toString(WfPreference.class.getResourceAsStream("WarrenJavaFormatter.xml"));
+						jdtUiPrefs.setValue("org.eclipse.jdt.ui.formatterprofiles", profilesString);
+						
+						/*
+						 * <profiles version="12">
+						 * <profile kind="CodeFormatterProfile" name="Warren - Java" version="12">
+						 * <setting id="org.eclipse.jdt.core.formatter.comment.insert_new_line_before_root_tags" value="insert"/>
+						 */
+						Document doc = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(WfPreference.class.getResourceAsStream("WarrenJavaFormatter.xml"));
+						NodeList profileNodes = doc.getElementsByTagName("profile");
+						for (int i = 0; i < profileNodes.getLength(); i++) {
+							Element profile = (Element)profileNodes.item(i);
+							String kind = profile.getAttribute("kind");
+							if (!"CodeFormatterProfile".equals(kind))
+								continue;
+							String name = profile.getAttribute("name");
+							if (!"Warren - Java".equals(name))
+								continue;
+							jdtUiPrefs.setValue("formatter_profile", "_" + name);
+							String version = profile.getAttribute("version");
+							jdtUiPrefs.setValue("formatter_settings_version", version);
+							NodeList settings = profile.getElementsByTagName("setting");
+							for (int s = 0; s < settings.getLength(); s++) {
+								Element setting = (Element)settings.item(s);
+								String id = setting.getAttribute("id");
+								String value = setting.getAttribute("value");
+								if (!value.equals(jdtCorePrefs.getString(id)))
+									jdtCorePrefs.setValue(id, value);
+							}
+						}
+					}
+					catch (IOException e) {
+						throw new RuntimeException(e);
+					}
+					catch (SAXException e) {
+						throw new RuntimeException(e);
+					}
+					catch (ParserConfigurationException e) {
+						throw new RuntimeException(e);
+					}
+				}
+
+				@Override
+				void unconfigure() {
+					IPreferenceStore s = new ScopedPreferenceStore(InstanceScope.INSTANCE, "org.eclipse.jdt.ui");
+					s.setToDefault("formatter_profile");
+				}
+				
 			},
 		};
 	};
