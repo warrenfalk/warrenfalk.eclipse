@@ -118,7 +118,7 @@ public abstract class WfPreference {
 						String profilesString = IOUtils.toString(WfPreference.class.getResourceAsStream("WarrenJavaFormatter.xml"));
 						jdtUiPrefs.setValue("org.eclipse.jdt.ui.formatterprofiles", profilesString);
 						
-						/*
+						/* Snippit of file:
 						 * <profiles version="12">
 						 * <profile kind="CodeFormatterProfile" name="Warren - Java" version="12">
 						 * <setting id="org.eclipse.jdt.core.formatter.comment.insert_new_line_before_root_tags" value="insert"/>
