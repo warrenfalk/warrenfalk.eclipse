@@ -1,11 +1,24 @@
 package warrenfalk.eclipse.preferences;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.StringWriter;
+import java.io.UnsupportedEncodingException;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerConfigurationException;
+import javax.xml.transform.TransformerException;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.TransformerFactoryConfigurationError;
+import javax.xml.transform.dom.DOMSource;
+import javax.xml.transform.stream.StreamResult;
 
 import org.apache.commons.io.IOUtils;
 import org.eclipse.core.commands.Parameterization;
@@ -100,7 +113,8 @@ public abstract class WfPreference {
 					}
 				}
 			},
-			
+
+			// ----- Custom Java Formatter ------------
 			new WfPreference("Custom Java Formatter") {
 
 				@Override
@@ -163,6 +177,128 @@ public abstract class WfPreference {
 					s.setToDefault("formatter_profile");
 				}
 				
+			},
+
+			// ----- Custom code templates ------------
+			new WfPreference("Custom code templates") {
+				
+				@Override
+				boolean isConfigured() {
+					Map<String,Element> mine = getMyTemplates();
+					Map<String,Element> current = getCurrentTemplates();
+					for (String my : mine.keySet())
+						if (!current.containsKey(my))
+							return false;
+					return true;
+				}
+
+				@Override
+				void configure() {
+					Map<String,Element> mine = getMyTemplates();
+					Map<String,Element> current = getCurrentTemplates();
+					for (String my : mine.keySet())
+						current.put(my, mine.get(my));
+					IPreferenceStore s = new ScopedPreferenceStore(InstanceScope.INSTANCE, "org.eclipse.jdt.ui");
+					String templates = getXml(current.values());
+					s.setValue("org.eclipse.jdt.ui.text.custom_code_templates", templates);
+				}
+
+				@Override
+				void unconfigure() {
+					Map<String,Element> mine = getMyTemplates();
+					Map<String,Element> current = getCurrentTemplates();
+					for (String my : mine.keySet())
+						current.remove(my);
+					IPreferenceStore s = new ScopedPreferenceStore(InstanceScope.INSTANCE, "org.eclipse.jdt.ui");
+					String templates = getXml(current.values());
+					s.setValue("org.eclipse.jdt.ui.text.custom_code_templates", templates);
+				}
+
+				Map<String,Element> getMyTemplates() {
+					HashMap<String,Element> mineByName = new HashMap<String,Element>();
+					try {
+						Document mine = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(WfPreference.class.getResourceAsStream("CodeTemplates.xml"));
+						NodeList templateList = mine.getDocumentElement().getElementsByTagName("template");
+						for (int i = 0; i < templateList.getLength(); i++) {
+							Element templateElement = (Element)templateList.item(i);
+							String name = templateElement.getAttribute("name");
+							mineByName.put(name, templateElement);
+						}
+					}
+					catch (SAXException e) {
+						e.printStackTrace();
+					}
+					catch (IOException e) {
+						e.printStackTrace();
+					}
+					catch (ParserConfigurationException e) {
+						e.printStackTrace();
+					}
+					return mineByName;
+				}
+
+				Map<String,Element> getCurrentTemplates() {
+					HashMap<String,Element> byName = new HashMap<String,Element>();
+					try {
+						IPreferenceStore s = new ScopedPreferenceStore(InstanceScope.INSTANCE, "org.eclipse.jdt.ui");
+						String templates = s.getString("org.eclipse.jdt.ui.text.custom_code_templates");
+						if (templates == null || "".equals(templates))
+							return byName;
+						Document doc = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(new ByteArrayInputStream(templates.getBytes("UTF-8")));
+						NodeList templateList = doc.getDocumentElement().getElementsByTagName("template");
+						for (int i = 0; i < templateList.getLength(); i++) {
+							Element templateElement = (Element)templateList.item(i);
+							String name = templateElement.getAttribute("name");
+							byName.put(name, templateElement);
+						}
+					}
+					catch (SAXException e) {
+						e.printStackTrace();
+					}
+					catch (IOException e) {
+						e.printStackTrace();
+					}
+					catch (ParserConfigurationException e) {
+						e.printStackTrace();
+					}
+					return byName;
+				}
+				
+				private String getXml(Collection<Element> elements) {
+					try {
+						String docstring = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"?><templates/>";
+						Document doc = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(new ByteArrayInputStream(docstring.getBytes("UTF-8")));
+						for (Element element : elements)
+							doc.getDocumentElement().appendChild(doc.importNode(element, true));
+						Transformer transformer = TransformerFactory.newInstance().newTransformer();
+						StreamResult result = new StreamResult(new StringWriter());
+						transformer.transform(new DOMSource(doc), result);
+						String xmlString = result.getWriter().toString();
+						return xmlString;
+					}
+					catch (UnsupportedEncodingException e) {
+						throw new RuntimeException(e);
+					}
+					catch (SAXException e) {
+						throw new RuntimeException(e);
+					}
+					catch (IOException e) {
+						throw new RuntimeException(e);
+					}
+					catch (ParserConfigurationException e) {
+						throw new RuntimeException(e);
+					}
+					catch (TransformerConfigurationException e) {
+						throw new RuntimeException(e);
+					}
+					catch (TransformerFactoryConfigurationError e) {
+						throw new RuntimeException(e);
+					}
+					catch (TransformerException e) {
+						throw new RuntimeException(e);
+					}
+				}
+
 			},
 		};
 	};
