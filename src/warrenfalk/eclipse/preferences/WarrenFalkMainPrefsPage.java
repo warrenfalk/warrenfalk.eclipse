@@ -48,6 +48,7 @@ public class WarrenFalkMainPrefsPage extends PropertyPage implements IWorkbenchP
 					pref.configure();
 				else
 					pref.unconfigure();
+				pref.desired = pref.current;
 			}
 		}
 		return super.performOk();
