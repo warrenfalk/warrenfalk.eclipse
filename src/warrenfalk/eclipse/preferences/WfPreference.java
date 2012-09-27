@@ -1,7 +1,11 @@
 package warrenfalk.eclipse.preferences;
 
 import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.StringWriter;
 import java.io.UnsupportedEncodingException;
 import java.util.Collection;
@@ -20,6 +24,7 @@ import javax.xml.transform.TransformerFactoryConfigurationError;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 
+import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.io.IOUtils;
 import org.eclipse.core.commands.Parameterization;
 import org.eclipse.core.commands.ParameterizedCommand;
@@ -29,8 +34,12 @@ import org.eclipse.jface.bindings.Scheme;
 import org.eclipse.jface.bindings.keys.KeyBinding;
 import org.eclipse.jface.bindings.keys.KeySequence;
 import org.eclipse.jface.bindings.keys.ParseException;
+import org.eclipse.jface.dialogs.MessageDialog;
 import org.eclipse.jface.preference.IPreferenceStore;
 import org.eclipse.jface.util.Util;
+import org.eclipse.swt.SWT;
+import org.eclipse.swt.graphics.FontData;
+import org.eclipse.swt.widgets.Display;
 import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.commands.ICommandService;
 import org.eclipse.ui.keys.IBindingService;
@@ -39,6 +48,8 @@ import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
+
+import com.sun.jna.platform.win32.Shell32;
 
 /**
  * Abstract class, overridden for each custom common preference set.
@@ -296,6 +307,89 @@ public abstract class WfPreference {
 					}
 					catch (TransformerException e) {
 						throw new RuntimeException(e);
+					}
+				}
+
+			},
+
+			// ----- Editor syntax coloring and fonts ------------
+			new WfPreference("Editor syntax coloring and fonts") {
+				
+				@Override
+				boolean isConfigured() {
+					IPreferenceStore s;
+					s = new ScopedPreferenceStore(InstanceScope.INSTANCE, "org.eclipse.jdt.ui");
+					String value = s.getString("org.eclipse.jface.textfont");
+					return value != null && value.contains("WFProgrammer2");
+				}
+
+				@Override
+				void configure() {
+					FontData fd = checkAndInstallFont();
+					if (fd != null) {
+						IPreferenceStore s;
+						s = new ScopedPreferenceStore(InstanceScope.INSTANCE, "org.eclipse.jdt.ui");
+						s.setValue("org.eclipse.jface.textfont", fd.toString());
+						
+						s = new ScopedPreferenceStore(InstanceScope.INSTANCE, "org.eclipse.ui.workbench");
+						s.setValue("org.eclipse.jdt.ui.editors.textfont", fd.toString());
+					}
+				}
+
+				@Override
+				void unconfigure() {
+					IPreferenceStore s;
+					s = new ScopedPreferenceStore(InstanceScope.INSTANCE, "org.eclipse.jdt.ui");
+					s.setToDefault("org.eclipse.jface.textfont");
+					
+					s = new ScopedPreferenceStore(InstanceScope.INSTANCE, "org.eclipse.ui.workbench");
+					s.setToDefault("org.eclipse.jdt.ui.editors.textfont");
+				}
+				
+				FontData checkAndInstallFont() {
+					try {
+						Display display = PlatformUI.getWorkbench().getDisplay();
+						FontData[] fonts = display.getFontList("WFProgrammer2", true);
+						if (fonts.length > 0)
+							return new FontData("WFProgrammer2", 10, SWT.NORMAL);
+						// extract font to temp file and install
+						if (System.getProperty("os.name").toLowerCase().contains("win")) {
+							MessageDialog.openInformation(null, "Need admin priveleges", "In order to install the fonts, elevated access will need to be requested.  Click OK to proceed");
+							File installFile = resourceToTempFile("windows_add_font.ps1");
+							File fontFile = resourceToTempFile("WFProgrammer2.ttf"); // might want to use the .sfd in linux
+							Shell32.INSTANCE.ShellExecute(null, "Runas", "powershell", "-File \"" + installFile.toString() + "\" -path \"" + fontFile.toString() + "\"", null, 0);
+							fonts = display.getFontList("WFProgrammer2", true);
+							if (fonts.length == 0)
+								MessageDialog.openWarning(null, "Font installation not successful", "Either the installation of the font failed, or a restart of the application is necessary for it to take effect.");
+							fontFile.delete();
+							installFile.delete();
+							return (fonts.length > 0) ? new FontData("WFProgrammer2", 10, SWT.NORMAL) : null;
+						}
+						else {
+							MessageDialog.openWarning(null, "Font installation not successful", "Installation of fonts is not implemented on this OS");
+							return null;
+						}
+					}
+					catch (IOException e) {
+						throw new RuntimeException(e);
+					}
+				}
+				
+				File resourceToTempFile(String resource) throws IOException {
+					InputStream is = WfPreference.class.getResourceAsStream(resource);
+					try {
+						File tempFile = File.createTempFile(FilenameUtils.removeExtension(resource), "." + FilenameUtils.getExtension(resource));
+						OutputStream os = new FileOutputStream(tempFile);
+						try {
+							IOUtils.copy(is, os);
+							return tempFile;
+						}
+						finally {
+							os.close();
+						}
+					}
+					finally {
+						is.close();
 					}
 				}
 
